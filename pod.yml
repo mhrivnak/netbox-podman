@@ -1,0 +1,229 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: netbox-env
+data:
+  CORS_ORIGIN_ALLOW_ALL: True
+  DB_HOST: postgres
+  DB_NAME: netbox
+  DB_USER: netbox
+  EMAIL_FROM: netbox@bar.com
+  EMAIL_PORT: 25
+  EMAIL_SERVER: localhost
+  EMAIL_TIMEOUT: 5
+  EMAIL_USERNAME: netbox
+  EMAIL_USE_SSL: false
+  EMAIL_USE_TLS: false
+  GRAPHQL_ENABLED: true
+  HOUSEKEEPING_INTERVAL: 86400
+  MEDIA_ROOT: /opt/netbox/netbox/media
+  METRICS_ENABLED: false
+  REDIS_CACHE_DATABASE: 1
+  REDIS_CACHE_HOST: redis
+  REDIS_CACHE_INSECURE_SKIP_TLS_VERIFY: false
+  REDIS_CACHE_SSL: false
+  REDIS_DATABASE: 0
+  REDIS_HOST: redis
+  REDIS_INSECURE_SKIP_TLS_VERIFY: false
+  REDIS_SSL: false
+  RELEASE_CHECK_URL: https://api.github.com/repos/netbox-community/netbox/releases
+  SKIP_SUPERUSER: true
+  WEBHOOKS_ENABLED: true
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-env
+data:
+  POSTGRES_DB: netbox
+  POSTGRES_USER: netbox
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netbox
+spec:
+  containers:
+    - name: netbox
+      image: docker.io/netboxcommunity/netbox:latest
+      envFrom:
+        - configMapRef:
+            name: netbox-env
+            optional: false
+      env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-pw
+              key: POSTGRES_PASSWORD
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-pw
+              key: REDIS_PASSWORD
+        - name: REDIS_CACHE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-pw
+              key: REDIS_PASSWORD
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: netbox-secret-key
+              key: SECRET_KEY
+      ports:
+        - containerPort: 8080
+          hostPort: 8080
+      volumeMounts:
+        - name: configuration
+          mountPath: /etc/netbox/config
+          readOnly: true
+        - name: netbox-media-files
+          mountPath: /opt/netbox/netbox/media
+        - name: netbox-reports-files
+          mountPath: /opt/netbox/netbox/reports
+        - name: netbox-scripts-files
+          mountPath: /opt/netbox/netbox/scripts
+      livenessProbe:
+        httpGet:
+          path: /login/
+          port: 8080
+        initialDelaySeconds: 300
+        periodSeconds: 15
+        timeoutSeconds: 3
+
+    - name: netbox-worker
+      image: docker.io/netboxcommunity/netbox:latest
+      envFrom:
+        - configMapRef:
+            name: netbox-env
+            optional: false
+      env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-pw
+              key: POSTGRES_PASSWORD
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-pw
+              key: REDIS_PASSWORD
+        - name: REDIS_CACHE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-pw
+              key: REDIS_PASSWORD
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: netbox-secret-key
+              key: SECRET_KEY
+      command:
+        - /opt/netbox/venv/bin/python
+        - /opt/netbox/netbox/manage.py
+        - rqworker
+      volumeMounts:
+        - name: configuration
+          mountPath: /etc/netbox/config
+          readOnly: true
+        - name: netbox-media-files
+          mountPath: /opt/netbox/netbox/media
+        - name: netbox-reports-files
+          mountPath: /opt/netbox/netbox/reports
+        - name: netbox-scripts-files
+          mountPath: /opt/netbox/netbox/scripts
+
+    - name: netbox-housekeeping
+      image: docker.io/netboxcommunity/netbox:latest
+      envFrom:
+        - configMapRef:
+            name: netbox-env
+            optional: false
+      env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-pw
+              key: POSTGRES_PASSWORD
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-pw
+              key: REDIS_PASSWORD
+        - name: REDIS_CACHE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-pw
+              key: REDIS_PASSWORD
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: netbox-secret-key
+              key: SECRET_KEY
+      command:
+        - /opt/netbox/housekeeping.sh
+      volumeMounts:
+        - name: configuration
+          mountPath: /etc/netbox/config
+          readOnly: true
+        - name: netbox-media-files
+          mountPath: /opt/netbox/netbox/media
+        - name: netbox-reports-files
+          mountPath: /opt/netbox/netbox/reports
+        - name: netbox-scripts-files
+          mountPath: /opt/netbox/netbox/scripts
+
+    - name: postgres
+      image: docker.io/postgres:17-alpine
+      env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-pw
+              key: POSTGRES_PASSWORD
+      envFrom:
+        - configMapRef:
+            name: postgres-env
+            optional: false
+      volumeMounts:
+        - name: netbox-postgres-data
+          mountPath: /var/lib/postgresql/data
+
+    - name: redis
+      image: docker.io/valkey/valkey:8.0-alpine
+      env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-pw
+              key: REDIS_PASSWORD
+      command:
+        - sh
+        - -c
+        - valkey-server --appendonly yes --requirepass "$REDIS_PASSWORD"
+      volumeMounts:
+        - name: netbox-redis-data
+          mountPath: /data
+
+  volumes:
+    - name: configuration
+      persistentVolumeClaim:
+        name: configuration
+    - name: netbox-media-files
+      persistentVolumeClaim:
+        name: netbox-media-files
+    - name: netbox-reports-files
+      persistentVolumeClaim:
+        name: netbox-reports-files
+    - name: netbox-scripts-files
+      persistentVolumeClaim:
+        name: netbox-scripts-files
+    - name: netbox-postgres-data
+      persistentVolumeClaim:
+        name: netbox-postgres-data
+    - name: netbox-redis-data
+      persistentVolumeClaim:
+        name: netbox-redit-data
