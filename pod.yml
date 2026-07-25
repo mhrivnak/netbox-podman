@@ -147,7 +147,7 @@ spec:
           mountPath: /opt/netbox/netbox/scripts
 
     - name: postgres
-      image: docker.io/postgres:18-alpine
+      image: registry.access.redhat.com/hi/postgresql:18
       env:
         - name: POSTGRES_PASSWORD
           valueFrom:
@@ -163,7 +163,7 @@ spec:
           mountPath: /var/lib/postgresql/
 
     - name: redis
-      image: docker.io/valkey/valkey:9.1-alpine
+      image: registry.access.redhat.com/hi/valkey:latest
       env:
         - name: REDIS_PASSWORD
           valueFrom:
