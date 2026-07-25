@@ -73,6 +73,11 @@ spec:
             secretKeyRef:
               name: netbox-secret-key
               key: SECRET_KEY
+        - name: API_TOKEN_PEPPER_1
+          valueFrom:
+            secretKeyRef:
+              name: netbox-api-token-pepper
+              key: API_TOKEN_PEPPER_1
       ports:
         - containerPort: 8080
           hostPort: 8080
@@ -121,6 +126,11 @@ spec:
             secretKeyRef:
               name: netbox-secret-key
               key: SECRET_KEY
+        - name: API_TOKEN_PEPPER_1
+          valueFrom:
+            secretKeyRef:
+              name: netbox-api-token-pepper
+              key: API_TOKEN_PEPPER_1
       command:
         - /opt/netbox/venv/bin/python
         - /opt/netbox/netbox/manage.py

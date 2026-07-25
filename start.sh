@@ -12,6 +12,14 @@ echo "
 apiVersion: v1
 kind: Secret
 metadata:
+  name: netbox-api-token-pepper
+stringData:
+  API_TOKEN_PEPPER_1: $(podman run --rm -it docker.io/netboxcommunity/netbox:latest /opt/netbox/netbox/generate_secret_key.py)" | podman secret create netbox-api-token-pepper -
+
+echo "
+apiVersion: v1
+kind: Secret
+metadata:
   name: redis-pw
 stringData:
   REDIS_PASSWORD: $(tr -dc A-Za-z0-9 </dev/urandom | head -c 32; echo)" | podman secret create redis-pw -
